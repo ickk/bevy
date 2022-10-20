@@ -57,9 +57,8 @@ impl Visibility {
     #[inline]
     pub fn toggle(&mut self) {
         *self = match self {
-            Visibility::Inherited => Visibility::Hidden,
+            Visibility::Inherited | Visibility::Visible => Visibility::Hidden,
             Visibility::Hidden => Visibility::Inherited,
-            Visibility::Visible => Visibility::Hidden,
         }
     }
 
