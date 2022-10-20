@@ -11,7 +11,6 @@ use bevy_reflect::Reflect;
 use bevy_transform::components::GlobalTransform;
 use bevy_transform::TransformSystem;
 use std::cell::Cell;
-use std::ops::Not;
 use thread_local::ThreadLocal;
 
 use crate::{
@@ -28,9 +27,6 @@ use crate::{
 /// If an entity is hidden in this way, all [`Children`] (and all of their children and so on) who
 /// are set to `Inherited` will also be hidden.
 /// This is done by setting the values of their [`ComputedVisibility`] component.
-///
-/// A root-level entity that is set to `Inherited` will be visible, and as such will cause any of
-/// its [`Children`] entities which are set to `Inherited` to also be visible.
 #[derive(Component, Clone, Copy, Reflect, Debug, PartialEq, Eq)]
 #[reflect(Component, Default)]
 pub enum Visibility {
@@ -53,32 +49,21 @@ impl Default for Visibility {
     }
 }
 
-impl Not for Visibility {
-    type Output = Visibility;
-
-    #[inline]
-    fn not(self) -> Visibility {
-        match self {
-            Visibility::Inherited => Visibility::Hidden,
-            Visibility::Hidden => Visibility::Inherited,
-        }
-    }
-}
-
 impl Visibility {
-    /// Whether this entity is Inherited.
-    #[inline]
-    pub const fn is_inherited(&self) -> bool {
-        matches!(self, Self::Inherited)
-    }
-
     /// Toggle the visibility state between Inherited and Hidden.
+    ///
+    /// Calling `toggle` on the unconditional Visible value will turn it into Hidden as expected,
+    /// however subsequent calls of `toggle` will only alternate between Inherited and Hidden.
     #[inline]
     pub fn toggle(&mut self) {
-        *self = !*self;
+        *self = match self {
+            Visibility::Inherited => Visibility::Hidden,
+            Visibility::Hidden => Visibility::Inherited,
+            Visibility::Visible => Visibility::Hidden,
+        }
     }
 
-    /// Set the visibility to either Inherited or Hidden using a boolean expression.
+    /// Set the visibility to either Inherited (true) or Hidden (false) using a boolean expression.
     #[inline]
     pub fn set(&mut self, inherited: bool) {
         *self = if inherited {
@@ -308,7 +293,7 @@ fn visibility_propagate_system(
     for (children, visibility, mut computed_visibility, entity) in root_query.iter_mut() {
         // Setting `Visibility::Inherited` on the root entity is the same as setting `Visibility::Visible`.
         computed_visibility.is_visible_in_hierarchy =
-            visibility.is_inherited() || (*visibility == Visibility::Visible);
+            *visibility == Visibility::Inherited || *visibility == Visibility::Visible;
         // reset "view" visibility here ... if this entity should be drawn a future system should set this to true
         computed_visibility.is_visible_in_view = false;
         if let Some(children) = children {
@@ -341,8 +326,9 @@ fn propagate_recursive(
             child_parent.get(), expected_parent,
             "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
         );
-        computed_visibility.is_visible_in_hierarchy =
-            (visibility.is_inherited() && parent_visible) || (*visibility == Visibility::Visible);
+        computed_visibility.is_visible_in_hierarchy = (parent_visible
+            && *visibility == Visibility::Inherited)
+            || *visibility == Visibility::Visible;
         // reset "view" visibility here ... if this entity should be drawn a future system should set this to true
         computed_visibility.is_visible_in_view = false;
         computed_visibility.is_visible_in_hierarchy
