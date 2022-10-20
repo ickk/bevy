@@ -584,6 +584,84 @@ mod test {
     }
 
     #[test]
+    fn visibility_propagation_unconditional_visible() {
+        let mut app = App::new();
+        app.add_system(visibility_propagate_system);
+
+        let root1 = app
+            .world
+            .spawn((Visibility::Visible, ComputedVisibility::default()))
+            .id();
+        let root1_child1 = app
+            .world
+            .spawn((Visibility::Inherited, ComputedVisibility::default()))
+            .id();
+        let root1_child2 = app
+            .world
+            .spawn((Visibility::Hidden, ComputedVisibility::default()))
+            .id();
+        let root1_child1_grandchild1 = app
+            .world
+            .spawn((Visibility::Visible, ComputedVisibility::default()))
+            .id();
+        let root1_child2_grandchild1 = app
+            .world
+            .spawn((Visibility::Visible, ComputedVisibility::default()))
+            .id();
+
+        let root2 = app
+            .world
+            .spawn((Visibility::Inherited, ComputedVisibility::default()))
+            .id();
+        let root3 = app
+            .world
+            .spawn((Visibility::Hidden, ComputedVisibility::default()))
+            .id();
+
+        app.world
+            .entity_mut(root1)
+            .push_children(&[root1_child1, root1_child2]);
+        app.world
+            .entity_mut(root1_child1)
+            .push_children(&[root1_child1_grandchild1]);
+        app.world
+            .entity_mut(root1_child2)
+            .push_children(&[root1_child2_grandchild1]);
+
+        app.update();
+
+        let is_visible = |e: Entity| {
+            app.world
+                .entity(e)
+                .get::<ComputedVisibility>()
+                .unwrap()
+                .is_visible_in_hierarchy
+        };
+        assert!(
+            is_visible(root1),
+            "an unconditionally visible root is visible"
+        );
+        assert!(
+            is_visible(root1_child1),
+            "an inheriting child of an unconditionally visible parent is visible"
+        );
+        assert!(
+            !is_visible(root1_child2),
+            "a hidden child on an unconditionally visible parent is hidden"
+        );
+        assert!(
+            is_visible(root1_child1_grandchild1),
+            "an unconditionally visible child of an inheriting parent is visible"
+        );
+        assert!(
+            is_visible(root1_child2_grandchild1),
+            "an unconditionally visible child of a hidden parent is visible"
+        );
+        assert!(is_visible(root2), "an inheriting root in visible");
+        assert!(!is_visible(root3), "a hidden root is hidden");
+    }
+
+    #[test]
     fn ensure_visibility_enum_size() {
         use std::mem;
         assert_eq!(1, mem::size_of::<Visibility>());
