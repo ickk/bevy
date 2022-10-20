@@ -41,6 +41,10 @@ pub enum Visibility {
     /// An entity with `Visibility::Hidden` will be unconditionally hidden, and will also cause any
     /// of its [`Children`] which are set to `Visibility::Inherited` to also be hidden.
     Hidden,
+    /// An entity with `Visibility::Visible` will be unconditionally visible, regardless of whether
+    /// the [`Parent`] entity is hidden or not. Visibility will also be propagated to any
+    /// [`Children`] set to `Visibility::Inherited`.
+    Visible,
 }
 
 impl Default for Visibility {
@@ -302,7 +306,9 @@ fn visibility_propagate_system(
     children_query: Query<&Children, (With<Parent>, With<Visibility>, With<ComputedVisibility>)>,
 ) {
     for (children, visibility, mut computed_visibility, entity) in root_query.iter_mut() {
-        computed_visibility.is_visible_in_hierarchy = visibility.is_inherited();
+        // Setting `Visibility::Inherited` on the root entity is the same as setting `Visibility::Visible`.
+        computed_visibility.is_visible_in_hierarchy =
+            visibility.is_inherited() || (*visibility == Visibility::Visible);
         // reset "view" visibility here ... if this entity should be drawn a future system should set this to true
         computed_visibility.is_visible_in_view = false;
         if let Some(children) = children {
@@ -335,7 +341,8 @@ fn propagate_recursive(
             child_parent.get(), expected_parent,
             "Malformed hierarchy. This probably means that your hierarchy has been improperly maintained, or contains a cycle"
         );
-        computed_visibility.is_visible_in_hierarchy = visibility.is_inherited() && parent_visible;
+        computed_visibility.is_visible_in_hierarchy =
+            (visibility.is_inherited() && parent_visible) || (*visibility == Visibility::Visible);
         // reset "view" visibility here ... if this entity should be drawn a future system should set this to true
         computed_visibility.is_visible_in_view = false;
         computed_visibility.is_visible_in_hierarchy
